@@ -56,7 +56,7 @@ alerting:
 | `gatus.io/url` | URL Gatus will probe. Presence of this label enables monitoring. | — |
 | `gatus.io/enabled` | Set to `"false"` to disable monitoring even if `gatus.io/url` is set. | `"true"` |
 | `gatus.io/interval` | How often to check | `1m` |
-| `gatus.io/conditions` | Gatus condition expression | `[STATUS] == 200` |
+| `gatus.io/conditions` | Gatus condition expression. Override if your service returns a different status code (e.g. `[STATUS] == 204`). | `[STATUS] == 200` |
 
 ## Limitations
 
