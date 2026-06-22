@@ -32,7 +32,6 @@ services:
   my-service:
     image: my-service:latest
     labels:
-      gatus.io/enabled: "true"
       gatus.io/url: "http://my-service:8080"
 ```
 
@@ -54,8 +53,7 @@ alerting:
 
 | Label | Description | Default |
 |---|---|---|
-| `gatus.io/enabled` | Set to `"true"` to monitor this container | — |
-| `gatus.io/url` | URL Gatus will probe | — |
+| `gatus.io/url` | URL Gatus will probe. Presence of this label enables monitoring. | — |
 | `gatus.io/interval` | How often to check | `1m` |
 | `gatus.io/conditions` | Gatus condition expression | `[STATUS] == 200` |
 
