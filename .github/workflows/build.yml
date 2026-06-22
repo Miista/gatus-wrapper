@@ -1,6 +1,9 @@
 name: Build and publish
 
 on:
+  push:
+    branches:
+      - main
   schedule:
     - cron: '0 2 * * *'  # daily at 2 AM UTC
   workflow_dispatch:       # manual trigger for testing / bootstrapping
@@ -31,7 +34,7 @@ jobs:
           echo "Upstream: $LATEST  Current: $CURRENT"
           echo "version=$LATEST" >> $GITHUB_OUTPUT
 
-          if [ "$LATEST" != "$CURRENT" ]; then
+          if [ "$LATEST" != "$CURRENT" ] || [ "${{ github.event_name }}" = "push" ]; then
             echo "needs_build=true" >> $GITHUB_OUTPUT
           else
             echo "needs_build=false" >> $GITHUB_OUTPUT
@@ -76,6 +79,7 @@ jobs:
           build-args: GATUS_VERSION=${{ needs.detect.outputs.version }}
 
       - name: Update .version and commit
+        if: github.event_name != 'push'
         run: |
           echo "${{ needs.detect.outputs.version }}" > .version
           git config user.name "github-actions[bot]"
