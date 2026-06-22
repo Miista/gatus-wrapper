@@ -1,4 +1,5 @@
-FROM twinproduction/gatus:latest AS gatus
+ARG GATUS_VERSION=latest
+FROM twinproduction/gatus:${GATUS_VERSION} AS gatus
 FROM alpine:latest
 RUN apk add --no-cache curl jq yq
 COPY --from=gatus /gatus /gatus
