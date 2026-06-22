@@ -2,4 +2,7 @@
     handle /health {
         respond "OK" 200
     }
+    handle /fail {
+        respond "FAIL" 503
+    }
 }

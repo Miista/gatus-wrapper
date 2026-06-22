@@ -1,7 +1,9 @@
 services:
   gatus:
-    image: ghcr.io/miista/gatus-wrapper:latest
+    image: gatus-wrapper:latest
     container_name: gatus
+    environment:
+      NTFY_TOKEN: ${NTFY_TOKEN}
     volumes:
       - ./test/gatus.yaml:/config/config.yaml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -25,11 +27,7 @@ services:
     volumes:
       - ./test/Caddyfile:/etc/caddy/Caddyfile:ro
     labels:
-      # Healthy endpoint — returns 200
-      gatus.io/url: "http://caddy/health"
-
-      # Failing endpoint — returns 404
-      # gatus.io/url: "http://caddy/fail"
+      gatus.io/url: "http://caddy/health http://caddy/fail"
     networks:
       - test
 

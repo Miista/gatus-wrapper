@@ -24,12 +24,14 @@ generate_config() {
     (.Config.Labels["gatus.io/url"] | split(" ")) as $urls |
     (.Config.Labels["gatus.io/interval"] // "1m") as $interval |
     (.Config.Labels["gatus.io/conditions"] // "[STATUS] == 200") as $conditions |
+    (($urls | length) > 1) as $multi |
     $urls | to_entries[] | {
-      name: (if .key == 0 then $c.Name[1:] else "\($c.Name[1:])-\(.key)" end),
+      name: (if $multi then .value else $c.Name[1:] end),
+      group: "",
       url: .value,
       interval: $interval,
       conditions: $conditions
-    } | "  - name: \(.name)\n    url: \(.url)\n    interval: \(.interval)\n    conditions:\n      - \"\(.conditions)\"\n\($alerts)"')
+    } | "  - name: \(.name)\n\(if .group != "" then "    group: \(.group)\n" else "" end)    url: \(.url)\n    interval: \(.interval)\n    conditions:\n      - \"\(.conditions)\"\n\($alerts)"')
 
   if [ -z "$ENDPOINTS" ]; then
     cat /etc/gatus/fallback.yaml >> "$MERGED"

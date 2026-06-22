@@ -1,7 +1,8 @@
 alerting:
   ntfy:
     topic: alerts
-    url: "http://ntfy:80"
+    url: "https://notify.palmund.net"
+    token: "$NTFY_TOKEN"
     default-alert:
       failure-threshold: 1
       success-threshold: 1
