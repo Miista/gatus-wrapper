@@ -24,7 +24,7 @@ jobs:
           LATEST=$(curl -sf \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/TwiN/gatus/releases/latest" \
-            | jq -r '.tag_name | ltrimstr("v")')
+            | jq -r '.tag_name')
 
           CURRENT=$(cat .version 2>/dev/null || echo "")
 
