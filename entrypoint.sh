@@ -19,7 +19,7 @@ ALERTS_BLOCK=$(printf "    alerts:\n%s" "$ALERT_TYPES")
 
 # Discover endpoints from Docker labels
 ENDPOINTS=$(curl -sf --unix-socket /var/run/docker.sock http://localhost/containers/json | \
-jq -r --arg alerts "$ALERTS_BLOCK" '.[] | select(.Labels["gatus.io/url"] != null) | {
+jq -r --arg alerts "$ALERTS_BLOCK" '.[] | select(.Labels["gatus.io/url"] != null and .Labels["gatus.io/enabled"] != "false") | {
   name: .Names[0][1:],
   url:        .Labels["gatus.io/url"],
   interval:   (.Labels["gatus.io/interval"]   // "1m"),
