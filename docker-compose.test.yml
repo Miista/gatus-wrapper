@@ -1,0 +1,38 @@
+services:
+  gatus:
+    image: ghcr.io/miista/gatus-wrapper:latest
+    container_name: gatus
+    volumes:
+      - ./test/gatus.yaml:/config/config.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "8080:8080"
+    networks:
+      - test
+
+  ntfy:
+    image: binwiederhier/ntfy
+    container_name: ntfy
+    command: serve
+    ports:
+      - "8090:80"
+    networks:
+      - test
+
+  caddy:
+    image: caddy:alpine
+    container_name: caddy
+    volumes:
+      - ./test/Caddyfile:/etc/caddy/Caddyfile:ro
+    labels:
+      # Healthy endpoint — returns 200
+      gatus.io/url: "http://caddy/health"
+
+      # Failing endpoint — returns 404
+      # gatus.io/url: "http://caddy/fail"
+    networks:
+      - test
+
+networks:
+  test:
+    driver: bridge
