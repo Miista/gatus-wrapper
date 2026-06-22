@@ -20,12 +20,16 @@ generate_config() {
 
   # Discover endpoints from Docker labels
   ENDPOINTS=$(docker ps -q | xargs -r docker inspect | \
-  jq -r --arg alerts "$ALERTS_BLOCK" '.[] | select(.Config.Labels["gatus.io/url"] != null) | select((.Config.Labels["gatus.io/enabled"] // "true") == "true") | {
-    name: .Name[1:],
-    url:        .Config.Labels["gatus.io/url"],
-    interval:   (.Config.Labels["gatus.io/interval"]   // "1m"),
-    conditions: (.Config.Labels["gatus.io/conditions"] // "[STATUS] == 200")
-  } | "  - name: \(.name)\n    url: \(.url)\n    interval: \(.interval)\n    conditions:\n      - \"\(.conditions)\"\n\($alerts)"')
+  jq -r --arg alerts "$ALERTS_BLOCK" '.[] | select(.Config.Labels["gatus.io/url"] != null) | select((.Config.Labels["gatus.io/enabled"] // "true") == "true") | . as $c |
+    (.Config.Labels["gatus.io/url"] | split(" ")) as $urls |
+    (.Config.Labels["gatus.io/interval"] // "1m") as $interval |
+    (.Config.Labels["gatus.io/conditions"] // "[STATUS] == 200") as $conditions |
+    $urls | to_entries[] | {
+      name: (if .key == 0 then $c.Name[1:] else "\($c.Name[1:])-\(.key)" end),
+      url: .value,
+      interval: $interval,
+      conditions: $conditions
+    } | "  - name: \(.name)\n    url: \(.url)\n    interval: \(.interval)\n    conditions:\n      - \"\(.conditions)\"\n\($alerts)"')
 
   if [ -z "$ENDPOINTS" ]; then
     cat /etc/gatus/fallback.yaml >> "$MERGED"

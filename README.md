@@ -53,7 +53,7 @@ alerting:
 
 | Label | Description | Default |
 |---|---|---|
-| `gatus.io/url` | URL Gatus will probe. Presence of this label enables monitoring. | — |
+| `gatus.io/url` | Space-separated list of URLs Gatus will probe. Multiple URLs generate one endpoint per URL. Presence of this label enables monitoring. | — |
 | `gatus.io/enabled` | Set to `"false"` to disable monitoring even if `gatus.io/url` is set. | `"true"` |
 | `gatus.io/interval` | How often to check | `1m` |
 | `gatus.io/conditions` | Gatus condition expression. Override if your service returns a different status code (e.g. `[STATUS] == 204`). | `[STATUS] == 200` |
@@ -67,7 +67,7 @@ After adding or changing `gatus.io/*` labels on a service, two steps are require
 
 ## Limitations
 
-- Each container supports only one monitored endpoint. For multiple checks on the same service, add them manually to `config.yaml`.
+- Multiple URLs share the same `interval` and `conditions`. For different settings per URL, add endpoints manually to `config.yaml`.
 - Gatus and the containers it monitors must share the same Docker network.
 - The Docker socket must be mounted into the gatus-wrapper container.
 
