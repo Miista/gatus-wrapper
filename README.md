@@ -59,10 +59,11 @@ alerting:
 | `gatus.io/interval` | How often to check | `1m` |
 | `gatus.io/conditions` | Gatus condition expression | `[STATUS] == 200` |
 
-## Requirements
+## Limitations
 
-- Gatus and the containers it monitors must share the same Docker network
-- The Docker socket must be mounted into the gatus-wrapper container
+- Each container supports only one monitored endpoint. For multiple checks on the same service, add them manually to `config.yaml`.
+- Gatus and the containers it monitors must share the same Docker network.
+- The Docker socket must be mounted into the gatus-wrapper container.
 
 ## Automatic updates
 
