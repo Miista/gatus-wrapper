@@ -58,6 +58,13 @@ alerting:
 | `gatus.io/interval` | How often to check | `1m` |
 | `gatus.io/conditions` | Gatus condition expression. Override if your service returns a different status code (e.g. `[STATUS] == 204`). | `[STATUS] == 200` |
 
+## Adding or updating a monitored service
+
+After adding or changing `gatus.io/*` labels on a service, two steps are required:
+
+1. Recreate the service container to apply the new labels: `docker compose up -d --force-recreate <service>`
+2. Restart gatus to regenerate the config: `docker restart gatus`
+
 ## Limitations
 
 - Each container supports only one monitored endpoint. For multiple checks on the same service, add them manually to `config.yaml`.
