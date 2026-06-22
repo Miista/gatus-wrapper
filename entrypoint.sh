@@ -19,12 +19,12 @@ generate_config() {
   ALERTS_BLOCK=$(printf "    alerts:\n%s" "$ALERT_TYPES")
 
   # Discover endpoints from Docker labels
-  ENDPOINTS=$(curl -sf --unix-socket /var/run/docker.sock http://localhost/containers/json | \
-  jq -r --arg alerts "$ALERTS_BLOCK" '.[] | select(.Labels["gatus.io/url"] != null) | select((.Labels["gatus.io/enabled"] // "true") == "true") | {
-    name: .Names[0][1:],
-    url:        .Labels["gatus.io/url"],
-    interval:   (.Labels["gatus.io/interval"]   // "1m"),
-    conditions: (.Labels["gatus.io/conditions"] // "[STATUS] == 200")
+  ENDPOINTS=$(docker ps -q | xargs -r docker inspect | \
+  jq -r --arg alerts "$ALERTS_BLOCK" '.[] | select(.Config.Labels["gatus.io/url"] != null) | select((.Config.Labels["gatus.io/enabled"] // "true") == "true") | {
+    name: .Name[1:],
+    url:        .Config.Labels["gatus.io/url"],
+    interval:   (.Config.Labels["gatus.io/interval"]   // "1m"),
+    conditions: (.Config.Labels["gatus.io/conditions"] // "[STATUS] == 200")
   } | "  - name: \(.name)\n    url: \(.url)\n    interval: \(.interval)\n    conditions:\n      - \"\(.conditions)\"\n\($alerts)"')
 
   if [ -z "$ENDPOINTS" ]; then
