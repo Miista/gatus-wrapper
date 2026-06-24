@@ -33,10 +33,13 @@ generate_config() {
       conditions: $conditions
     } | "  - name: \(.name)\n\(if .group != "" then "    group: \(.group)\n" else "" end)    url: \(.url)\n    interval: \(.interval)\n    conditions:\n      - \"\(.conditions)\"\n\($alerts)"')
 
-  if [ -z "$ENDPOINTS" ]; then
+  HAS_MANUAL=$(yq '.endpoints // [] | length' "$MERGED" 2>/dev/null || echo 0)
+
+  if [ -z "$ENDPOINTS" ] && [ "$HAS_MANUAL" = "0" ]; then
     cat /etc/gatus/fallback.yaml >> "$MERGED"
-  else
-    printf "\nendpoints:\n%s\n" "$ENDPOINTS" >> "$MERGED"
+  elif [ -n "$ENDPOINTS" ]; then
+    LABEL_YAML=$(printf "endpoints:\n%s\n" "$ENDPOINTS")
+    echo "$LABEL_YAML" | yq eval-all 'select(fi==0).endpoints = ((select(fi==0).endpoints // []) + select(fi==1).endpoints) | select(fi==0)' "$MERGED" - > "$MERGED.tmp" && mv "$MERGED.tmp" "$MERGED"
   fi
 }
 

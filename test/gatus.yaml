@@ -7,3 +7,10 @@ alerting:
       failure-threshold: 1
       success-threshold: 1
       send-on-resolved: true
+
+endpoints:
+  - name: manual-example
+    url: https://example.com
+    interval: 5m
+    conditions:
+      - "[STATUS] == 200"

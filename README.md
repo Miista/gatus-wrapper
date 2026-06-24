@@ -12,7 +12,7 @@ This image ships a minimal default config internally. At startup, it:
 
 1. Deep-merges an optional `/config/config.yaml` on top of the defaults using [yq](https://github.com/mikefarah/yq)
 2. Scans all running Docker containers for `gatus.io/*` labels
-3. Generates endpoint definitions from those labels
+3. Generates endpoint definitions from those labels and appends them to any `endpoints:` already defined in `config.yaml`
 4. Launches Gatus with the combined config
 
 This means monitoring config lives alongside the service it monitors — in the same `docker-compose.yml` entry.
@@ -49,6 +49,23 @@ alerting:
       send-on-resolved: true
 ```
 
+## Manually-defined endpoints
+
+For endpoints that aren't backed by a Docker container (external services, third-party APIs), add them directly to `config.yaml` under `endpoints:`. They are merged with the label-discovered endpoints:
+
+```yaml
+endpoints:
+  - name: external-api
+    url: https://api.example.com/health
+    interval: 5m
+    conditions:
+      - "[STATUS] == 200"
+    alerts:
+      - type: ntfy
+```
+
+Note: alerts are not auto-injected into manual endpoints — declare them explicitly if needed.
+
 ## Supported labels
 
 | Label | Description | Default |
@@ -67,7 +84,7 @@ After adding or changing `gatus.io/*` labels on a service, two steps are require
 
 ## Limitations
 
-- Multiple URLs share the same `interval` and `conditions`. For different settings per URL, add endpoints manually to `config.yaml`.
+- Multiple URLs share the same `interval` and `conditions`. For different settings per URL, add endpoints manually to `config.yaml` (see [Manually-defined endpoints](#manually-defined-endpoints)).
 - Gatus and the containers it monitors must share the same Docker network.
 - The Docker socket must be mounted into the gatus-wrapper container.
 
