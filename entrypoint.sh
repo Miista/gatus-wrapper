@@ -14,24 +14,19 @@ generate_config() {
     echo "gatus: no overrides, using defaults"
   fi
 
-  # Build alerts block from configured providers in merged config
-  ALERT_TYPES=$(yq '.alerting | keys | .[]' "$MERGED" 2>/dev/null | sed 's/^/      - type: /' || true)
-  ALERTS_BLOCK=$(printf "    alerts:\n%s" "$ALERT_TYPES")
-
   # Discover endpoints from Docker labels
   ENDPOINTS=$(docker ps -q | xargs -r docker inspect | \
-  jq -r --arg alerts "$ALERTS_BLOCK" '.[] | select(.Config.Labels["gatus.io/url"] != null) | select((.Config.Labels["gatus.io/enabled"] // "true") == "true") | . as $c |
+  jq -r '.[] | select(.Config.Labels["gatus.io/url"] != null) | select((.Config.Labels["gatus.io/enabled"] // "true") == "true") | . as $c |
     (.Config.Labels["gatus.io/url"] | split(" ")) as $urls |
     (.Config.Labels["gatus.io/interval"] // "1m") as $interval |
     (.Config.Labels["gatus.io/conditions"] // "[STATUS] == 200") as $conditions |
     (($urls | length) > 1) as $multi |
     $urls | to_entries[] | {
       name: (if $multi then .value else $c.Name[1:] end),
-      group: "",
       url: .value,
       interval: $interval,
       conditions: $conditions
-    } | "  - name: \(.name)\n\(if .group != "" then "    group: \(.group)\n" else "" end)    url: \(.url)\n    interval: \(.interval)\n    conditions:\n      - \"\(.conditions)\"\n\($alerts)"')
+    } | "  - name: \(.name)\n    url: \(.url)\n    interval: \(.interval)\n    conditions:\n      - \"\(.conditions)\""')
 
   HAS_MANUAL=$(yq '.endpoints // [] | length' "$MERGED" 2>/dev/null || echo 0)
 
@@ -41,6 +36,12 @@ generate_config() {
     LABEL_YAML=$(printf "endpoints:\n%s\n" "$ENDPOINTS")
     echo "$LABEL_YAML" | yq eval-all 'select(fi==0).endpoints = ((select(fi==0).endpoints // []) + select(fi==1).endpoints) | select(fi==0)' "$MERGED" - > "$MERGED.tmp" && mv "$MERGED.tmp" "$MERGED"
   fi
+
+  # Auto-inject configured alerting providers into every endpoint missing an alerts block
+  yq -i '
+    (.alerting // {} | keys | map({"type": .})) as $defaults |
+    .endpoints |= map(.alerts = (.alerts // $defaults))
+  ' "$MERGED"
 }
 
 # Generate initial config and start gatus

@@ -60,11 +60,9 @@ endpoints:
     interval: 5m
     conditions:
       - "[STATUS] == 200"
-    alerts:
-      - type: ntfy
 ```
 
-Note: alerts are not auto-injected into manual endpoints — declare them explicitly if needed.
+Any configured alerting provider is auto-injected into every endpoint that doesn't declare its own `alerts:` block. To opt out for a specific endpoint, set `alerts: []` explicitly.
 
 ## Supported labels
 
