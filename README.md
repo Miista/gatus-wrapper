@@ -88,4 +88,24 @@ After adding or changing `gatus.io/*` labels on a service, two steps are require
 
 ## Automatic updates
 
-A GitHub Actions workflow runs daily and checks for new releases of the upstream Gatus image. When a new version is detected, it automatically builds and publishes a new multi-arch image (`linux/amd64`, `linux/arm64`) to GHCR.
+A GitHub Actions workflow runs daily and checks for new releases of the upstream Gatus image. When a new version is detected — or the wrapper itself changes — it builds and publishes a new multi-arch image (`linux/amd64`, `linux/arm64`) to GHCR.
+
+### Tags
+
+Every build pushes three tags:
+
+| Tag | Example | Mutable? | Use for |
+|-----|---------|----------|---------|
+| `<version>-g<sha>` | `5.8.0-ga1b2c3d` | **No** — never reused | Pinning / reproducible deploys |
+| `<version>` | `5.8.0` | Yes — moves to the newest build of that Gatus version | Drop-in upstream-version tracking |
+| `latest` | `latest` | Yes | Always-newest |
+
+The `<version>` tag tracks the upstream Gatus release and stays drop-in compatible, but it is **mutable**: if the wrapper is rebuilt while Gatus stays on the same version, `<version>` is moved to the new build, leaving the old image with no plain version tag.
+
+For reproducible deployments, pin to the **immutable** `<version>-g<sha>` tag (which also identifies the exact wrapper commit) together with its digest:
+
+```yaml
+image: ghcr.io/miista/gatus-wrapper:5.8.0-ga1b2c3d@sha256:...
+```
+
+The [`docker pin`](https://github.com/Miista/homebrew-docker-pin) plugin resolves `latest` to the most specific matching version tag — the immutable `-g<sha>` tag — automatically.
