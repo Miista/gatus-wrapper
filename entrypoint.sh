@@ -29,7 +29,7 @@ generate_config() {
     $urls | to_entries[] |
     (.value | capture("^https?://(?<h>[^/:]+)") | .h) as $host |
     ($names | map(select(. == $host)) | length > 0) as $is_internal |
-    ($label_resolver // (if $is_internal or $resolver == "" then null else $resolver end)) as $effective_resolver |
+    ($label_resolver // (if ($is_internal or ($host | contains(".") | not)) or $resolver == "" then null else $resolver end)) as $effective_resolver |
     {
       name: (if $multi then .value else $c.Name[1:] end),
       url: .value,
@@ -52,6 +52,12 @@ generate_config() {
     (.alerting // {} | keys | map({"type": .})) as $defaults |
     .endpoints |= map(.alerts = (.alerts // $defaults))
   ' "$MERGED"
+
+  # Auto-inject client.dns-resolver into endpoints whose hostname is not a container name
+  if [ -n "$DNS_RESOLVER" ]; then
+    export _YQ_RESOLVER="$DNS_RESOLVER"
+    yq -i 'with(.endpoints[] | select((.url | test("^https?://[^/]*\\.")) and (.client == null)); .client["dns-resolver"] = env(_YQ_RESOLVER))' "$MERGED"
+  fi
 }
 
 # Generate initial config and start gatus
