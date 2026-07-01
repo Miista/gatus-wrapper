@@ -15,53 +15,52 @@ containers at startup and generating Gatus endpoint definitions from their label
 docker build -t gatus-wrapper:latest .
 docker build -t gatus-wrapper:latest --build-arg GATUS_VERSION=v5.36.0 .
 
+# Run unit tests
+go test ./...
+
 # Run the test stack (gatus-wrapper + ntfy + a Caddy target with gatus.io/url labels)
 NTFY_TOKEN=... docker compose -f docker-compose.test.yml up --build
 # Gatus UI at http://localhost:8080 ; ntfy at http://localhost:8090
 ```
 
-There is no Go source or unit-test suite in this repo — the wrapper is a shell entrypoint plus
-config. "Testing" means running `docker-compose.test.yml` and observing the generated endpoints
-in the Gatus UI / API (`/api/v1/endpoints/statuses`).
-
 ## Architecture
 
-- **`Dockerfile`** — copies the `/gatus` binary out of `twinproduction/gatus:${GATUS_VERSION}`
-  into an `alpine` base with `jq`, `yq`, `docker-cli` added. `ENTRYPOINT` is `entrypoint.sh`.
-  `GATUS_CONFIG_PATH=/tmp/config.yaml` (the generated/merged file).
-- **`config.yaml`** — internal default config baked in at `/etc/gatus/config.yaml` (just
-  `server.port: 8080`).
-- **`fallback.yaml`** — baked in at `/etc/gatus/fallback.yaml`; a self-check endpoint used only
-  when no overrides and no labeled containers exist.
-- **`entrypoint.sh`** — the core logic. On startup and on every relevant Docker event it runs
-  `generate_config`, then launches `/gatus` and watches `docker events`.
+- **`Dockerfile`** — multi-stage build: copies `/gatus` from `twinproduction/gatus:${GATUS_VERSION}`, builds the Go wrapper (`main.go`) with `golang:1.26-alpine`, and produces a minimal `alpine` runtime image. `ENTRYPOINT` is `/gatus-wrapper`. `GATUS_CONFIG_PATH=/tmp/config.yaml`.
+- **`main.go`** — the core logic as a Go program. Uses the Docker API directly (`github.com/docker/docker`) and `gopkg.in/yaml.v3` for YAML. All paths overridable via env vars (`DEFAULTS_PATH`, `OVERRIDES_PATH`, `MERGED_PATH`, `FALLBACK_PATH`, `GATUS_BIN`, `DOCKER_SOCKET`).
+- **`main_test.go`** — 36 unit tests covering deep merge, label discovery, DNS resolver injection, alerting injection, fallback, and wrapper-only key consumption.
+- **`config.yaml`** — internal default config baked in at `/etc/gatus/config.yaml` (just `server.port: 8080`).
+- **`fallback.yaml`** — baked in at `/etc/gatus/fallback.yaml`; used only when no endpoints exist at all.
+- **`entrypoint.sh`** — legacy shell entrypoint, kept for reference but no longer the `ENTRYPOINT`.
 
-`generate_config` flow:
-1. Deep-merge optional `/config/config.yaml` (user mount) on top of the baked-in defaults via
-   `yq eval-all` into `/tmp/config.yaml`.
-2. `docker ps | docker inspect | jq` to find containers with `gatus.io/url` set and
-   `gatus.io/enabled != "false"`, emitting one endpoint per space-separated URL.
-3. If no label endpoints **and** no manual `endpoints:` in the merged config, append
-   `fallback.yaml`. Otherwise merge label endpoints into the existing `endpoints:` array.
-4. Auto-inject every configured `alerting:` provider into any endpoint lacking its own `alerts:`
-   block (opt out per endpoint with `alerts: []`).
+`generateConfig` flow:
+1. Deep-merge `/config/config.yaml` (user overrides) on top of `/etc/gatus/config.yaml` (defaults) into `/tmp/config.yaml`.
+2. Extract wrapper-only keys: `client.dns-resolver` and `default.endpoints.interval` (consumed by the wrapper, not passed to gatus).
+3. Discover running containers via Docker API; find those with `gatus.io/url` label and `gatus.io/enabled != "false"`, emitting one endpoint per space-separated URL.
+4. For label-discovered endpoints: inject `client.dns-resolver` if the URL hostname contains a dot (external) and no `client` block is set. `gatus.io/dns-resolver` label overrides per endpoint.
+5. If no endpoints at all, append `fallback.yaml`.
+6. Auto-inject configured alerting providers into every endpoint missing an `alerts:` block.
+7. Inject `client.dns-resolver` into all endpoints (including manually-defined ones) with external hostnames and no existing `client:` block.
+8. Write `/tmp/config.yaml`. Gatus hot-reloads on file change.
 
-Gatus hot-reloads on config-file change, so regenerating `/tmp/config.yaml` is enough to pick up
-new containers; the entrypoint regenerates on container `start`/`die` events.
+The program then launches `/gatus` as a subprocess, watches Docker events (`start`/`die`), and regenerates config on changes. Exits when gatus exits.
 
 ## Conventions / supported labels
 
-- `gatus.io/url` — space-separated URLs; presence enables monitoring. Multiple URLs → one
-  endpoint per URL (endpoint name is the URL; single URL uses the container name).
+- `gatus.io/url` — space-separated URLs; presence enables monitoring. Multiple URLs → one endpoint per URL (named by URL); single URL uses the container name.
 - `gatus.io/enabled` — `"false"` disables (default `"true"`).
-- `gatus.io/interval` — default `1m`.
+- `gatus.io/interval` — check interval; overrides `default.endpoints.interval` from config (default `1m`).
 - `gatus.io/conditions` — default `[STATUS] == 200`.
-- Multiple URLs share one interval/conditions; for per-URL settings, add endpoints manually to
-  `config.yaml`.
-- Gatus and monitored containers must share a Docker network; the Docker socket must be mounted
-  (`/var/run/docker.sock:ro`).
-- After changing labels: recreate the target (`docker compose up -d --force-recreate <svc>`)
-  **and** restart gatus (`docker restart gatus`) to regenerate config.
+- `gatus.io/dns-resolver` — per-endpoint DNS resolver (e.g. `udp://1.1.1.1:53`); overrides global `client.dns-resolver`.
+- Multiple URLs share one interval/conditions; for per-URL settings, add endpoints manually to `config.yaml`.
+- Gatus and monitored containers must share a Docker network; the Docker socket must be mounted (`/var/run/docker.sock:ro`).
+- After changing labels: recreate the target (`docker compose up -d --force-recreate <svc>`) — config regenerates automatically via Docker event watch.
+
+## Wrapper-only config keys
+
+These keys in the user-mounted `config.yaml` are consumed by the wrapper and stripped before gatus sees the config:
+
+- `client.dns-resolver` — injected as `client.dns-resolver` on every endpoint whose URL hostname contains a dot (external) and has no existing `client:` block.
+- `default.endpoints.interval` — default check interval for label-discovered endpoints.
 
 ## Releases / tagging
 
