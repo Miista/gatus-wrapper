@@ -70,8 +70,32 @@ Any configured alerting provider is auto-injected into every endpoint that doesn
 |---|---|---|
 | `gatus.io/url` | Space-separated list of URLs Gatus will probe. Multiple URLs generate one endpoint per URL. Presence of this label enables monitoring. | — |
 | `gatus.io/enabled` | Set to `"false"` to disable monitoring even if `gatus.io/url` is set. | `"true"` |
-| `gatus.io/interval` | How often to check | `1m` |
+| `gatus.io/interval` | How often to check. Overrides `default.endpoints.interval`. | `1m` |
 | `gatus.io/conditions` | Gatus condition expression. Override if your service returns a different status code (e.g. `[STATUS] == 204`). | `[STATUS] == 200` |
+| `gatus.io/dns-resolver` | DNS resolver for this endpoint (e.g. `udp://1.1.1.1:53`). Overrides `client.dns-resolver`. | — |
+
+## Global config options
+
+These keys in `config.yaml` are consumed by the wrapper and not passed to Gatus directly.
+
+### `default.endpoints.interval`
+
+Sets the default check interval for all label-discovered endpoints. Overridden by `gatus.io/interval` per container.
+
+```yaml
+default:
+  endpoints:
+    interval: 30s
+```
+
+### `client.dns-resolver`
+
+Sets the DNS resolver for all external label-discovered endpoints — those whose hostname does not match a running container name. Useful in split-horizon DNS setups where the local resolver returns internal IPs, bypassing external tunnel checks. Overridden per endpoint with `gatus.io/dns-resolver`.
+
+```yaml
+client:
+  dns-resolver: udp://10.0.5.1:53
+```
 
 ## Adding or updating a monitored service
 

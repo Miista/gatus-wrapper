@@ -17,22 +17,25 @@ generate_config() {
   # Discover endpoints from Docker labels
   CONTAINER_NAMES=$(docker ps --format '{{.Names}}')
   DNS_RESOLVER=$(yq '.client["dns-resolver"] // ""' "$MERGED")
+  DEFAULT_INTERVAL=$(yq '.default.endpoints.interval // ""' "$MERGED")
   ENDPOINTS=$(docker ps -q | xargs -r docker inspect | \
-  jq -r --argjson names "$(echo "$CONTAINER_NAMES" | jq -R -s 'split("\n") | map(select(length > 0))')" --arg resolver "$DNS_RESOLVER" '
+  jq -r --argjson names "$(echo "$CONTAINER_NAMES" | jq -R -s 'split("\n") | map(select(length > 0))')" --arg resolver "$DNS_RESOLVER" --arg default_interval "$DEFAULT_INTERVAL" '
     .[] | select(.Config.Labels["gatus.io/url"] != null) | select((.Config.Labels["gatus.io/enabled"] // "true") == "true") | . as $c |
     (.Config.Labels["gatus.io/url"] | split(" ")) as $urls |
-    (.Config.Labels["gatus.io/interval"] // "1m") as $interval |
+    (.Config.Labels["gatus.io/interval"] // (if $default_interval != "" then $default_interval else "1m" end)) as $interval |
     (.Config.Labels["gatus.io/conditions"] // "[STATUS] == 200") as $conditions |
+    (.Config.Labels["gatus.io/dns-resolver"] // null) as $label_resolver |
     (($urls | length) > 1) as $multi |
     $urls | to_entries[] |
     (.value | capture("^https?://(?<h>[^/:]+)") | .h) as $host |
     ($names | map(select(. == $host)) | length > 0) as $is_internal |
+    ($label_resolver // (if $is_internal or $resolver == "" then null else $resolver end)) as $effective_resolver |
     {
       name: (if $multi then .value else $c.Name[1:] end),
       url: .value,
       interval: $interval,
       conditions: $conditions,
-      dns_resolver: (if $is_internal or $resolver == "" then null else $resolver end)
+      dns_resolver: $effective_resolver
     } | "  - name: \(.name)\n    url: \(.url)\n    interval: \(.interval)\n    conditions:\n      - \"\(.conditions)\"\(if .dns_resolver then "\n    client:\n      dns-resolver: \(.dns_resolver)" else "" end)"')
 
   HAS_MANUAL=$(yq '.endpoints // [] | length' "$MERGED" 2>/dev/null || echo 0)
