@@ -3,7 +3,6 @@ name: Build and publish
 on:
   push:
     branches:
-      - main
       - fix/use-fork-image
   schedule:
     - cron: '0 2 * * *'  # daily at 2 AM UTC
