@@ -23,7 +23,6 @@ var (
 	mergedPath    = envOr("MERGED_PATH", "/tmp/config.yaml")
 	fallbackPath  = envOr("FALLBACK_PATH", "/etc/gatus/fallback.yaml")
 	gatusBin      = envOr("GATUS_BIN", "/gatus")
-	dockerSocket  = envOr("DOCKER_SOCKET", "/var/run/docker.sock")
 )
 
 func envOr(key, def string) string {
@@ -328,14 +327,20 @@ func toSliceOfMaps(v interface{}) ([]map[string]interface{}, bool) {
 	return result, true
 }
 
+// newDockerClient builds a client from the environment and probes it. Probing
+// rather than stat'ing a socket path keeps this transport-agnostic: DOCKER_HOST
+// may point at a TCP endpoint (e.g. a docker-socket-proxy), in which case there
+// is no socket file to find and a stat check would skip discovery entirely.
 func newDockerClient() *client.Client {
-	if _, err := os.Stat(dockerSocket); err != nil {
-		slog.Warn("docker socket not available, skipping label discovery", "socket", dockerSocket)
-		return nil
-	}
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		slog.Warn("failed to create docker client", "err", err)
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := cli.Ping(ctx); err != nil {
+		slog.Warn("docker api not reachable, skipping label discovery", "host", cli.DaemonHost(), "err", err)
 		return nil
 	}
 	return cli

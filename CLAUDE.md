@@ -26,7 +26,9 @@ NTFY_TOKEN=... docker compose -f docker-compose.test.yml up --build
 ## Architecture
 
 - **`Dockerfile`** — multi-stage build: copies `/gatus` from `twinproduction/gatus:${GATUS_VERSION}`, builds the Go wrapper (`main.go`) with `golang:1.26-alpine`, and produces a minimal `alpine` runtime image. `ENTRYPOINT` is `/gatus-wrapper`. `GATUS_CONFIG_PATH=/tmp/config.yaml`.
-- **`main.go`** — the core logic as a Go program. Uses the Docker API directly (`github.com/docker/docker`) and `gopkg.in/yaml.v3` for YAML. All paths overridable via env vars (`DEFAULTS_PATH`, `OVERRIDES_PATH`, `MERGED_PATH`, `FALLBACK_PATH`, `GATUS_BIN`, `DOCKER_SOCKET`).
+- **`main.go`** — the core logic as a Go program. Uses the Docker API directly (`github.com/docker/docker`) and `gopkg.in/yaml.v3` for YAML. All paths overridable via env vars (`DEFAULTS_PATH`, `OVERRIDES_PATH`, `MERGED_PATH`, `FALLBACK_PATH`, `GATUS_BIN`). The Docker
+  connection comes from the standard `DOCKER_HOST` environment (socket or TCP); the client is
+  probed with a ping rather than by stat'ing a socket path, so a `docker-socket-proxy` works.
 - **`main_test.go`** — 36 unit tests covering deep merge, label discovery, DNS resolver injection, alerting injection, fallback, and wrapper-only key consumption.
 - **`config.yaml`** — internal default config baked in at `/etc/gatus/config.yaml` (just `server.port: 8080`).
 - **`fallback.yaml`** — baked in at `/etc/gatus/fallback.yaml`; used only when no endpoints exist at all.
@@ -52,7 +54,9 @@ The program then launches `/gatus` as a subprocess, watches Docker events (`star
 - `gatus.io/conditions` — default `[STATUS] == 200`.
 - `gatus.io/dns-resolver` — per-endpoint DNS resolver (e.g. `udp://1.1.1.1:53`); overrides global `client.dns-resolver`.
 - Multiple URLs share one interval/conditions; for per-URL settings, add endpoints manually to `config.yaml`.
-- Gatus and monitored containers must share a Docker network; the Docker socket must be mounted (`/var/run/docker.sock:ro`).
+- Gatus and monitored containers must share a Docker network. The wrapper needs Docker API access:
+  either mount the socket (`/var/run/docker.sock:ro`) or point `DOCKER_HOST` at a proxy exposing
+  the `containers` and `events` sections (e.g. `DOCKER_HOST=tcp://docker-socket-proxy:2375`).
 - After changing labels: recreate the target (`docker compose up -d --force-recreate <svc>`) — config regenerates automatically via Docker event watch.
 
 ## Wrapper-only config keys

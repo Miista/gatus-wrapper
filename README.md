@@ -108,7 +108,9 @@ After adding or changing `gatus.io/*` labels on a service, two steps are require
 
 - Multiple URLs share the same `interval` and `conditions`. For different settings per URL, add endpoints manually to `config.yaml` (see [Manually-defined endpoints](#manually-defined-endpoints)).
 - Gatus and the containers it monitors must share the same Docker network.
-- The Docker socket must be mounted into the gatus-wrapper container.
+- The wrapper needs Docker API access: either mount the socket into the container
+  (`/var/run/docker.sock:ro`), or set `DOCKER_HOST` to a proxy that exposes the `containers`
+  and `events` API sections (e.g. `DOCKER_HOST=tcp://docker-socket-proxy:2375`).
 
 ## Automatic updates
 
