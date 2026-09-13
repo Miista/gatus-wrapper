@@ -53,6 +53,7 @@ The program then launches `/gatus` as a subprocess, watches Docker events (`star
 - `gatus.io/interval` — check interval; overrides `default.endpoints.interval` from config (default `1m`).
 - `gatus.io/conditions` — default `[STATUS] == 200`.
 - `gatus.io/dns-resolver` — per-endpoint DNS resolver (e.g. `udp://1.1.1.1:53`); overrides global `client.dns-resolver`.
+- `gatus.io/group` — Gatus endpoint group (e.g. `infrastructure`); omitted entirely when unset.
 - Multiple URLs share one interval/conditions; for per-URL settings, add endpoints manually to `config.yaml`.
 - Gatus and monitored containers must share a Docker network. The wrapper needs Docker API access:
   either mount the socket (`/var/run/docker.sock:ro`) or point `DOCKER_HOST` at a proxy exposing

@@ -351,6 +351,7 @@ func syntheticDiscover(containers []fakeContainer, globalResolver, defaultInterv
 		}
 
 		labelResolver := labels["gatus.io/dns-resolver"]
+		group := labels["gatus.io/group"]
 		multi := len(urls) > 1
 
 		containerName := ""
@@ -387,6 +388,9 @@ func syntheticDiscover(containers []fakeContainer, globalResolver, defaultInterv
 				ep["client"] = map[string]interface{}{
 					"dns-resolver": effectiveResolver,
 				}
+			}
+			if group != "" {
+				ep["group"] = group
 			}
 
 			endpoints = append(endpoints, ep)
@@ -592,6 +596,35 @@ func TestLabelDiscovery(t *testing.T) {
 				{Names: []string{"/b"}, Labels: map[string]string{"gatus.io/url": "http://b/health"}},
 			},
 			wantLen: 2,
+		},
+		{
+			name: "gatus.io/group sets the endpoint group",
+			containers: []fakeContainer{
+				{Names: []string{"/authelia"}, Labels: map[string]string{
+					"gatus.io/url":   "https://auth.guldmund.dk/api/health",
+					"gatus.io/group": "infrastructure",
+				}},
+			},
+			wantLen: 1,
+			check: func(t *testing.T, eps []map[string]interface{}) {
+				if eps[0]["group"] != "infrastructure" {
+					t.Errorf("group=%v, want %q", eps[0]["group"], "infrastructure")
+				}
+			},
+		},
+		{
+			name: "no gatus.io/group label omits the group key",
+			containers: []fakeContainer{
+				{Names: []string{"/svc"}, Labels: map[string]string{
+					"gatus.io/url": "http://svc/health",
+				}},
+			},
+			wantLen: 1,
+			check: func(t *testing.T, eps []map[string]interface{}) {
+				if _, ok := eps[0]["group"]; ok {
+					t.Error("expected no group key when gatus.io/group label is absent")
+				}
+			},
 		},
 	}
 

@@ -144,6 +144,7 @@ func discoverEndpoints(cli *client.Client, globalResolver, defaultInterval strin
 		}
 
 		labelResolver := labels["gatus.io/dns-resolver"]
+		group := labels["gatus.io/group"]
 
 		multi := len(urls) > 1
 
@@ -178,6 +179,9 @@ func discoverEndpoints(cli *client.Client, globalResolver, defaultInterval strin
 				ep["client"] = map[string]interface{}{
 					"dns-resolver": effectiveResolver,
 				}
+			}
+			if group != "" {
+				ep["group"] = group
 			}
 
 			endpoints = append(endpoints, ep)
