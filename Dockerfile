@@ -9,12 +9,6 @@ COPY main.go ./
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o gatus-wrapper .
 
 FROM alpine:latest
-# tzdata: without it, TZ=Europe/Copenhagen silently falls back to UTC for
-# anything reading the OS timezone database (container `date`, log
-# timestamps) — the Gatus UI itself is unaffected since it converts to the
-# browser's local time client-side, but `docker logs` stayed UTC-only,
-# which caused a real mixup reconciling log lines against wall-clock times.
-RUN apk add --no-cache tzdata
 COPY --from=gatus /gatus /gatus
 COPY --from=builder /build/gatus-wrapper /gatus-wrapper
 ENV GATUS_CONFIG_PATH=/tmp/config.yaml
