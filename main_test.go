@@ -304,11 +304,7 @@ func splitWhitespace(s string) []string {
 }
 
 // syntheticDiscover mirrors discoverEndpoints exactly on fakeContainers.
-func syntheticDiscover(containers []fakeContainer, globalResolver, defaultInterval string, defaultGroup ...string) []map[string]interface{} {
-	dGroup := ""
-	if len(defaultGroup) > 0 {
-		dGroup = defaultGroup[0]
-	}
+func syntheticDiscover(containers []fakeContainer, globalResolver, defaultInterval string) []map[string]interface{} {
 	containerNames := make(map[string]bool)
 	for _, c := range containers {
 		for _, n := range c.Names {
@@ -356,9 +352,6 @@ func syntheticDiscover(containers []fakeContainer, globalResolver, defaultInterv
 
 		labelResolver := labels["gatus.io/dns-resolver"]
 		group := labels["gatus.io/group"]
-		if group == "" {
-			group = dGroup
-		}
 		multi := len(urls) > 1
 
 		containerName := ""
@@ -413,7 +406,6 @@ func TestLabelDiscovery(t *testing.T) {
 		containers      []fakeContainer
 		globalResolver  string
 		defaultInterval string
-		defaultGroup    string
 		wantLen         int
 		check           func(t *testing.T, eps []map[string]interface{})
 	}{
@@ -634,56 +626,11 @@ func TestLabelDiscovery(t *testing.T) {
 				}
 			},
 		},
-		{
-			name:         "defaultGroup used when label absent",
-			defaultGroup: "apps",
-			containers: []fakeContainer{
-				{Names: []string{"/svc"}, Labels: map[string]string{
-					"gatus.io/url": "http://svc/health",
-				}},
-			},
-			wantLen: 1,
-			check: func(t *testing.T, eps []map[string]interface{}) {
-				if eps[0]["group"] != "apps" {
-					t.Errorf("group=%v, want %q", eps[0]["group"], "apps")
-				}
-			},
-		},
-		{
-			name:         "gatus.io/group overrides defaultGroup",
-			defaultGroup: "apps",
-			containers: []fakeContainer{
-				{Names: []string{"/authelia"}, Labels: map[string]string{
-					"gatus.io/url":   "https://auth.guldmund.dk/api/health",
-					"gatus.io/group": "infrastructure",
-				}},
-			},
-			wantLen: 1,
-			check: func(t *testing.T, eps []map[string]interface{}) {
-				if eps[0]["group"] != "infrastructure" {
-					t.Errorf("group=%v, want %q", eps[0]["group"], "infrastructure")
-				}
-			},
-		},
-		{
-			name:    "no defaultGroup and no label omits the group key",
-			wantLen: 1,
-			containers: []fakeContainer{
-				{Names: []string{"/svc"}, Labels: map[string]string{
-					"gatus.io/url": "http://svc/health",
-				}},
-			},
-			check: func(t *testing.T, eps []map[string]interface{}) {
-				if _, ok := eps[0]["group"]; ok {
-					t.Error("expected no group key when neither defaultGroup nor label is set")
-				}
-			},
-		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			eps := syntheticDiscover(tc.containers, tc.globalResolver, tc.defaultInterval, tc.defaultGroup)
+			eps := syntheticDiscover(tc.containers, tc.globalResolver, tc.defaultInterval)
 			if len(eps) != tc.wantLen {
 				t.Fatalf("got %d endpoints, want %d; eps=%v", len(eps), tc.wantLen, eps)
 			}
@@ -784,6 +731,96 @@ func TestAlertingInjection(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			got := applyAlertingInjection(tc.cfg, cloneEps(tc.endpoints))
+			tc.check(t, got)
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 6.5. default.endpoints.group injection (manual and label-discovered alike)
+// ---------------------------------------------------------------------------
+
+func applyGroupInjection(defaultGroup string, eps []map[string]interface{}) []map[string]interface{} {
+	if defaultGroup == "" {
+		return eps
+	}
+	for i, ep := range eps {
+		if _, has := ep["group"]; !has {
+			ep["group"] = defaultGroup
+			eps[i] = ep
+		}
+	}
+	return eps
+}
+
+func TestGroupInjection(t *testing.T) {
+	tests := []struct {
+		name         string
+		defaultGroup string
+		endpoints    []map[string]interface{}
+		check        func(t *testing.T, eps []map[string]interface{})
+	}{
+		{
+			name:         "no defaultGroup no injection",
+			defaultGroup: "",
+			endpoints: []map[string]interface{}{
+				{"name": "ep1", "url": "http://x/h"},
+			},
+			check: func(t *testing.T, eps []map[string]interface{}) {
+				if _, ok := eps[0]["group"]; ok {
+					t.Error("expected no group injected when defaultGroup is empty")
+				}
+			},
+		},
+		{
+			name:         "defaultGroup injected into endpoint without a group",
+			defaultGroup: "apps",
+			endpoints: []map[string]interface{}{
+				{"name": "ep1", "url": "http://x/h"},
+			},
+			check: func(t *testing.T, eps []map[string]interface{}) {
+				if eps[0]["group"] != "apps" {
+					t.Errorf("group=%v, want %q", eps[0]["group"], "apps")
+				}
+			},
+		},
+		{
+			name:         "endpoint with existing group keeps its own group unchanged",
+			defaultGroup: "apps",
+			endpoints: []map[string]interface{}{
+				{"name": "ep1", "url": "http://x/h"},
+				{"name": "ep2", "url": "http://y/h", "group": "infrastructure"},
+			},
+			check: func(t *testing.T, eps []map[string]interface{}) {
+				if eps[0]["group"] != "apps" {
+					t.Errorf("ep1 group=%v, want %q (default)", eps[0]["group"], "apps")
+				}
+				if eps[1]["group"] != "infrastructure" {
+					t.Errorf("ep2 group=%v, want %q (unchanged)", eps[1]["group"], "infrastructure")
+				}
+			},
+		},
+		{
+			// mirrors the manual-endpoint gap this replaces: happier-relay,
+			// mealie, paperless previously needed group set by hand because
+			// the old defaultGroup plumbing only ran inside discoverEndpoints,
+			// which never sees manually-defined endpoints.
+			name:         "applies to manually-defined endpoints, not just label-discovered ones",
+			defaultGroup: "apps",
+			endpoints: []map[string]interface{}{
+				{"name": "paperless", "url": "https://docs.example.com/api/status/"},
+			},
+			check: func(t *testing.T, eps []map[string]interface{}) {
+				if eps[0]["group"] != "apps" {
+					t.Errorf("group=%v, want %q", eps[0]["group"], "apps")
+				}
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := applyGroupInjection(tc.defaultGroup, cloneEps(tc.endpoints))
 			tc.check(t, got)
 		})
 	}

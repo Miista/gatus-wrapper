@@ -41,8 +41,9 @@ NTFY_TOKEN=... docker compose -f docker-compose.test.yml up --build
 4. For label-discovered endpoints: inject `client.dns-resolver` if the URL hostname contains a dot (external) and no `client` block is set. `gatus.io/dns-resolver` label overrides per endpoint.
 5. If no endpoints at all, append `fallback.yaml`.
 6. Auto-inject configured alerting providers into every endpoint missing an `alerts:` block.
-7. Inject `client.dns-resolver` into all endpoints (including manually-defined ones) with external hostnames and no existing `client:` block.
-8. Write `/tmp/config.yaml`. Gatus hot-reloads on file change.
+7. Auto-inject `default.endpoints.group` into every endpoint missing a `group:` — manual and label-discovered alike (label-discovered endpoints can still set their own via `gatus.io/group`).
+8. Inject `client.dns-resolver` into all endpoints (including manually-defined ones) with external hostnames and no existing `client:` block.
+9. Write `/tmp/config.yaml`. Gatus hot-reloads on file change.
 
 The program then launches `/gatus` as a subprocess, watches Docker events (`start`/`die`), and regenerates config on changes. Exits when gatus exits.
 
@@ -66,7 +67,7 @@ These keys in the user-mounted `config.yaml` are consumed by the wrapper and str
 
 - `client.dns-resolver` — injected as `client.dns-resolver` on every endpoint whose URL hostname contains a dot (external) and has no existing `client:` block.
 - `default.endpoints.interval` — default check interval for label-discovered endpoints.
-- `default.endpoints.group` — default group for label-discovered endpoints that don't set `gatus.io/group` themselves.
+- `default.endpoints.group` — default group for any endpoint (manual or label-discovered) that doesn't already have one; same "fill in if missing" treatment as alert-provider injection above.
 
 ## Releases / tagging
 

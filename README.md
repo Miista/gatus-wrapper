@@ -91,7 +91,7 @@ default:
 
 ### `default.endpoints.group`
 
-Sets the default group for all label-discovered endpoints that don't set `gatus.io/group` themselves. Overridden by `gatus.io/group` per container; omitted entirely (no `group` key) if neither is set.
+Sets the default group for any endpoint — manual or label-discovered — that doesn't already have one. Label-discovered endpoints can still set their own via `gatus.io/group`, which wins over this default; manually-defined endpoints in `config.yaml` can set `group:` directly. Omitted entirely (no `group` key) if none of the above apply.
 
 ```yaml
 default:
