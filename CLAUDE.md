@@ -36,7 +36,7 @@ NTFY_TOKEN=... docker compose -f docker-compose.test.yml up --build
 
 `generateConfig` flow:
 1. Deep-merge `/config/config.yaml` (user overrides) on top of `/etc/gatus/config.yaml` (defaults) into `/tmp/config.yaml`.
-2. Extract wrapper-only keys: `client.dns-resolver` and `default.endpoints.interval` (consumed by the wrapper, not passed to gatus).
+2. Extract wrapper-only keys: `client.dns-resolver`, `default.endpoints.interval`, `default.endpoints.group` (consumed by the wrapper, not passed to gatus).
 3. Discover running containers via Docker API; find those with `gatus.io/url` label and `gatus.io/enabled != "false"`, emitting one endpoint per space-separated URL.
 4. For label-discovered endpoints: inject `client.dns-resolver` if the URL hostname contains a dot (external) and no `client` block is set. `gatus.io/dns-resolver` label overrides per endpoint.
 5. If no endpoints at all, append `fallback.yaml`.
@@ -53,7 +53,7 @@ The program then launches `/gatus` as a subprocess, watches Docker events (`star
 - `gatus.io/interval` — check interval; overrides `default.endpoints.interval` from config (default `1m`).
 - `gatus.io/conditions` — default `[STATUS] == 200`.
 - `gatus.io/dns-resolver` — per-endpoint DNS resolver (e.g. `udp://1.1.1.1:53`); overrides global `client.dns-resolver`.
-- `gatus.io/group` — Gatus endpoint group (e.g. `infrastructure`); omitted entirely when unset.
+- `gatus.io/group` — Gatus endpoint group (e.g. `infrastructure`); overrides `default.endpoints.group` from config; omitted entirely when neither is set.
 - Multiple URLs share one interval/conditions; for per-URL settings, add endpoints manually to `config.yaml`.
 - Gatus and monitored containers must share a Docker network. The wrapper needs Docker API access:
   either mount the socket (`/var/run/docker.sock:ro`) or point `DOCKER_HOST` at a proxy exposing
@@ -66,6 +66,7 @@ These keys in the user-mounted `config.yaml` are consumed by the wrapper and str
 
 - `client.dns-resolver` — injected as `client.dns-resolver` on every endpoint whose URL hostname contains a dot (external) and has no existing `client:` block.
 - `default.endpoints.interval` — default check interval for label-discovered endpoints.
+- `default.endpoints.group` — default group for label-discovered endpoints that don't set `gatus.io/group` themselves.
 
 ## Releases / tagging
 

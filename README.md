@@ -73,7 +73,7 @@ Any configured alerting provider is auto-injected into every endpoint that doesn
 | `gatus.io/interval` | How often to check. Overrides `default.endpoints.interval`. | `1m` |
 | `gatus.io/conditions` | Gatus condition expression. Override if your service returns a different status code (e.g. `[STATUS] == 204`). | `[STATUS] == 200` |
 | `gatus.io/dns-resolver` | DNS resolver for this endpoint (e.g. `udp://1.1.1.1:53`). Overrides `client.dns-resolver`. | — |
-| `gatus.io/group` | Gatus endpoint group (e.g. `infrastructure`). Omitted entirely (no `group` key) if unset, matching Gatus's own default of ungrouped. | — |
+| `gatus.io/group` | Gatus endpoint group (e.g. `infrastructure`). Overrides `default.endpoints.group`. Omitted entirely (no `group` key) if neither is set, matching Gatus's own default of ungrouped. | — |
 
 ## Global config options
 
@@ -87,6 +87,16 @@ Sets the default check interval for all label-discovered endpoints. Overridden b
 default:
   endpoints:
     interval: 30s
+```
+
+### `default.endpoints.group`
+
+Sets the default group for all label-discovered endpoints that don't set `gatus.io/group` themselves. Overridden by `gatus.io/group` per container; omitted entirely (no `group` key) if neither is set.
+
+```yaml
+default:
+  endpoints:
+    group: apps
 ```
 
 ### `client.dns-resolver`

@@ -304,7 +304,11 @@ func splitWhitespace(s string) []string {
 }
 
 // syntheticDiscover mirrors discoverEndpoints exactly on fakeContainers.
-func syntheticDiscover(containers []fakeContainer, globalResolver, defaultInterval string) []map[string]interface{} {
+func syntheticDiscover(containers []fakeContainer, globalResolver, defaultInterval string, defaultGroup ...string) []map[string]interface{} {
+	dGroup := ""
+	if len(defaultGroup) > 0 {
+		dGroup = defaultGroup[0]
+	}
 	containerNames := make(map[string]bool)
 	for _, c := range containers {
 		for _, n := range c.Names {
@@ -352,6 +356,9 @@ func syntheticDiscover(containers []fakeContainer, globalResolver, defaultInterv
 
 		labelResolver := labels["gatus.io/dns-resolver"]
 		group := labels["gatus.io/group"]
+		if group == "" {
+			group = dGroup
+		}
 		multi := len(urls) > 1
 
 		containerName := ""
@@ -406,6 +413,7 @@ func TestLabelDiscovery(t *testing.T) {
 		containers      []fakeContainer
 		globalResolver  string
 		defaultInterval string
+		defaultGroup    string
 		wantLen         int
 		check           func(t *testing.T, eps []map[string]interface{})
 	}{
@@ -626,11 +634,56 @@ func TestLabelDiscovery(t *testing.T) {
 				}
 			},
 		},
+		{
+			name:         "defaultGroup used when label absent",
+			defaultGroup: "apps",
+			containers: []fakeContainer{
+				{Names: []string{"/svc"}, Labels: map[string]string{
+					"gatus.io/url": "http://svc/health",
+				}},
+			},
+			wantLen: 1,
+			check: func(t *testing.T, eps []map[string]interface{}) {
+				if eps[0]["group"] != "apps" {
+					t.Errorf("group=%v, want %q", eps[0]["group"], "apps")
+				}
+			},
+		},
+		{
+			name:         "gatus.io/group overrides defaultGroup",
+			defaultGroup: "apps",
+			containers: []fakeContainer{
+				{Names: []string{"/authelia"}, Labels: map[string]string{
+					"gatus.io/url":   "https://auth.guldmund.dk/api/health",
+					"gatus.io/group": "infrastructure",
+				}},
+			},
+			wantLen: 1,
+			check: func(t *testing.T, eps []map[string]interface{}) {
+				if eps[0]["group"] != "infrastructure" {
+					t.Errorf("group=%v, want %q", eps[0]["group"], "infrastructure")
+				}
+			},
+		},
+		{
+			name:    "no defaultGroup and no label omits the group key",
+			wantLen: 1,
+			containers: []fakeContainer{
+				{Names: []string{"/svc"}, Labels: map[string]string{
+					"gatus.io/url": "http://svc/health",
+				}},
+			},
+			check: func(t *testing.T, eps []map[string]interface{}) {
+				if _, ok := eps[0]["group"]; ok {
+					t.Error("expected no group key when neither defaultGroup nor label is set")
+				}
+			},
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			eps := syntheticDiscover(tc.containers, tc.globalResolver, tc.defaultInterval)
+			eps := syntheticDiscover(tc.containers, tc.globalResolver, tc.defaultInterval, tc.defaultGroup)
 			if len(eps) != tc.wantLen {
 				t.Fatalf("got %d endpoints, want %d; eps=%v", len(eps), tc.wantLen, eps)
 			}

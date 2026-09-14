@@ -99,7 +99,7 @@ func runningContainerNames(cli *client.Client) (map[string]bool, error) {
 }
 
 // discoverEndpoints returns endpoints built from Docker labels.
-func discoverEndpoints(cli *client.Client, globalResolver, defaultInterval string) []map[string]interface{} {
+func discoverEndpoints(cli *client.Client, globalResolver, defaultInterval, defaultGroup string) []map[string]interface{} {
 	containerNames, err := runningContainerNames(cli)
 	if err != nil {
 		slog.Warn("failed to list containers", "err", err)
@@ -145,6 +145,9 @@ func discoverEndpoints(cli *client.Client, globalResolver, defaultInterval strin
 
 		labelResolver := labels["gatus.io/dns-resolver"]
 		group := labels["gatus.io/group"]
+		if group == "" {
+			group = defaultGroup
+		}
 
 		multi := len(urls) > 1
 
@@ -219,10 +222,14 @@ func generateConfig(cli *client.Client) error {
 	}
 
 	defaultInterval := ""
+	defaultGroup := ""
 	if defaultBlock, ok := cfg["default"].(map[string]interface{}); ok {
 		if epBlock, ok := defaultBlock["endpoints"].(map[string]interface{}); ok {
 			if iv, ok := epBlock["interval"].(string); ok {
 				defaultInterval = iv
+			}
+			if g, ok := epBlock["group"].(string); ok {
+				defaultGroup = g
 			}
 		}
 	}
@@ -230,7 +237,7 @@ func generateConfig(cli *client.Client) error {
 	// 4. Discover label endpoints
 	var labelEndpoints []map[string]interface{}
 	if cli != nil {
-		labelEndpoints = discoverEndpoints(cli, globalResolver, defaultInterval)
+		labelEndpoints = discoverEndpoints(cli, globalResolver, defaultInterval, defaultGroup)
 	}
 
 	// 5. Collect manual endpoints from merged config
