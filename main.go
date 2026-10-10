@@ -7,7 +7,9 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
@@ -398,6 +400,30 @@ func watchDockerEvents(cli *client.Client, onChange func()) {
 	}
 }
 
+var regenMu sync.Mutex
+
+// fileSig returns a cheap change signature for path (mtime+size); "" if missing.
+func fileSig(path string) string {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return ""
+	}
+	return fi.ModTime().String() + "/" + strconv.FormatInt(fi.Size(), 10)
+}
+
+// watchOverrides polls path and calls onChange when it changes. Polling (rather
+// than inotify) survives single-file bind mounts and editors that replace the file.
+func watchOverrides(path string, interval time.Duration, onChange func()) {
+	last := fileSig(path)
+	for range time.Tick(interval) {
+		if cur := fileSig(path); cur != last {
+			last = cur
+			slog.Info("config file changed, regenerating config", "path", path)
+			onChange()
+		}
+	}
+}
+
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	slog.SetDefault(logger)
@@ -426,14 +452,21 @@ func main() {
 	}
 	slog.Info("gatus started", "pid", cmd.Process.Pid)
 
+	regenerate := func() {
+		regenMu.Lock()
+		defer regenMu.Unlock()
+		if err := generateConfig(cli); err != nil {
+			slog.Warn("config regeneration failed", "err", err)
+		}
+	}
+
 	// Watch docker events in background
 	if cli != nil {
-		go watchDockerEvents(cli, func() {
-			if err := generateConfig(cli); err != nil {
-				slog.Warn("config regeneration failed", "err", err)
-			}
-		})
+		go watchDockerEvents(cli, regenerate)
 	}
+
+	// Watch the user config file for changes
+	go watchOverrides(overridesPath, 5*time.Second, regenerate)
 
 	// Wait for gatus to exit
 	if err := cmd.Wait(); err != nil {
